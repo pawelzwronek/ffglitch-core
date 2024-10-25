@@ -4181,9 +4181,18 @@ int main(int argc, char **argv)
         /* open output file */
         if ( output_fname != NULL )
         {
+            if (!strcmp(output_fname, "-"))
+                output_fname = "pipe:";
+
             ffe_output_open(&ffo_fmt, NULL);
             if ( ffe_output_open(&ffo_codec, output_fname) < 0 )
                 exit(1);
+        }
+    } else {
+        if ( output_fname != NULL )
+        {
+            av_log(NULL, AV_LOG_ERROR, "No script(-s) selected, but output(-o) is set.");
+            exit(1);
         }
     }
 
