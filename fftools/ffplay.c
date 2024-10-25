@@ -4181,6 +4181,9 @@ int main(int argc, char **argv)
         /* open output file */
         if ( output_fname != NULL )
         {
+            if (!strcmp(output_fname, "-"))
+                output_fname = "pipe:";
+
             ffe_output_open(&ffo_fmt, NULL);
             if ( ffe_output_open(&ffo_codec, output_fname) < 0 )
                 exit(1);
