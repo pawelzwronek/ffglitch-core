@@ -704,33 +704,6 @@ static int opt_unknown(void *optctx, const char *opt)
 }
 
 /*********************************************************************/
-static void ffedit_output_open(
-        FFEditOutputContext **pffo_codec,
-        const char *o_fname)
-{
-    /* open output file for transplication if needed */
-    if ( strcmp(o_fname, "-") == 0 )
-        o_fname = "pipe:";
-    if ( ffe_output_open(pffo_codec, o_fname) < 0 )
-        exit(1);
-}
-
-static void ffedit_output_close(
-        FFEditOutputContext **pffo_codec,
-        FFEditOutputContext **pffo_fmt,
-        AVFormatContext *fctx)
-{
-    if ( *pffo_fmt != NULL )
-    {
-        ffe_output_merge(*pffo_codec, *pffo_fmt);
-        ffe_output_freep(pffo_fmt);
-    }
-    /* write glitched file */
-    ffe_output_flush(*pffo_codec, fctx);
-    ffe_output_freep(pffo_codec);
-}
-
-/*********************************************************************/
 static void ffedit_input_open(
         FFEditInputContext *ffi,
         FFEditOutputContext *ectx,
