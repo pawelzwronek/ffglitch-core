@@ -1393,14 +1393,8 @@ static void stream_close(VideoState *is)
                     break;
             }
             av_packet_free(&pkt);
-
-            ffe_output_merge(ffo_codec, ffo_fmt);
-            ffe_output_freep(&ffo_fmt);
         }
-
-        /* write glitched file */
-        ffe_output_flush(ffo_codec, is->ic);
-        ffe_output_freep(&ffo_codec);
+        ffedit_output_close(&ffo_codec, &ffo_fmt, is->ic);
     }
 
     avformat_close_input(&is->ic);
@@ -4181,12 +4175,8 @@ int main(int argc, char **argv)
         /* open output file */
         if ( output_fname != NULL )
         {
-            if (!strcmp(output_fname, "-"))
-                output_fname = "pipe:";
-
             ffe_output_open(&ffo_fmt, NULL);
-            if ( ffe_output_open(&ffo_codec, output_fname) < 0 )
-                exit(1);
+            ffedit_output_open(&ffo_codec, output_fname);
         }
     }
 
