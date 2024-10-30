@@ -3388,6 +3388,11 @@ static int read_thread(void *arg)
 
     ret = 0;
  fail:
+    /// When the output pipe closes during execution, we should exit immediately to prevent crashes on macOS caused by double-freeing certain pointers.
+    if (autoexit && ret == -ENXIO) {
+        exit(0);
+    }
+
     if (ic && !is->ic)
         avformat_close_input(&ic);
 
