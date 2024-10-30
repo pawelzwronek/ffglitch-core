@@ -91,6 +91,11 @@ const int program_birth_year = 2003;
 
 #include "ffedit_common.c"
 
+#ifndef SIGUSR1
+    #define SIGUSR1 10
+    #define SIGUSR2 12
+#endif
+
 static FFEditScriptFuncContext *sfc;
 /* output context to keep track of fixups from file format */
 static FFEditOutputContext *ffo_fmt = NULL;
@@ -1457,6 +1462,33 @@ static void do_exit(VideoState *is)
 static void sigterm_handler(int sig)
 {
     exit(123);
+}
+
+static void print_window_pos_size(int sig)
+{
+    if (window) {
+        // Print to stderr current window position and size
+        int x, y, w, h;
+        SDL_GetWindowPosition(window, &x, &y);
+        SDL_GetWindowSize(window, &w, &h);
+        fprintf(stderr, "Window position: %d, %d, size: %d, %d\n", x, y, w, h);
+    } else {
+        fprintf(stderr, "Window is not initialized\n");
+    }
+    signal(SIGUSR1, print_window_pos_size); /* User Signal 1.       */
+}
+int send_toggle_on_startup = 0;
+static void toggle_pause_play(int sig)
+{
+    if (window) {
+        SDL_Event event;
+        event.type = SDL_KEYDOWN;
+        event.key.keysym.sym = SDLK_SPACE;
+        SDL_PushEvent(&event);
+    } else {
+        send_toggle_on_startup = 1;
+    }
+    signal(SIGUSR2, toggle_pause_play); /* User Signal 1.       */
 }
 
 static void set_default_window_size(int width, int height, AVRational sar)
@@ -3382,6 +3414,11 @@ static int read_thread(void *arg)
 
     ret = 0;
  fail:
+    /// When the output pipe closes during execution, we should exit immediately to prevent crashes on macOS caused by double-freeing certain pointers.
+    if (autoexit && ret == -ENXIO) {
+        exit(0);
+    }
+
     if (ic && !is->ic)
         avformat_close_input(&ic);
 
@@ -4030,6 +4067,11 @@ void show_help_default(const char *opt, const char *arg)
 /* Called from the main */
 int main(int argc, char **argv)
 {
+    /* Handle signals as soon as possible */
+    signal(SIGTERM, sigterm_handler); /* Termination (ANSI).  */
+    signal(SIGUSR1, print_window_pos_size); /* User Signal 1.       */
+    signal(SIGUSR2, toggle_pause_play); /* User Signal 2.       */
+
     int flags, ret;
     VideoState *is;
 
@@ -4045,9 +4087,6 @@ int main(int argc, char **argv)
     avdevice_register_all();
 #endif
     avformat_network_init();
-
-    signal(SIGINT , sigterm_handler); /* Interrupt (ANSI).    */
-    signal(SIGTERM, sigterm_handler); /* Termination (ANSI).  */
 
     show_banner(argc, argv, options);
 
