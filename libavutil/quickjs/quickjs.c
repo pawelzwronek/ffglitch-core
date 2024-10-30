@@ -5833,6 +5833,26 @@ void __JS_FreeValue(JSContext *ctx, JSValue v)
     __JS_FreeValueRT(ctx->rt, v);
 }
 
+void JS_FreeValue(JSContext *ctx, JSValue v)
+{
+    if (JS_VALUE_HAS_REF_COUNT(v)) {
+        JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
+        if (--p->ref_count <= 0) {
+            __JS_FreeValue(ctx, v);
+        }
+    }
+}
+
+void JS_FreeValueRT(JSRuntime *rt, JSValue v)
+{
+    if (JS_VALUE_HAS_REF_COUNT(v)) {
+        JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
+        if (--p->ref_count <= 0) {
+            __JS_FreeValueRT(rt, v);
+        }
+    }
+}
+
 /* garbage collection */
 
 static void add_gc_object(JSRuntime *rt, JSGCObjectHeader *h,

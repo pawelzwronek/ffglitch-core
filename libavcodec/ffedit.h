@@ -48,6 +48,7 @@ const char *       ffe_feat_to_str(enum FFEditFeature feat);
 const char *       ffe_feat_desc(enum FFEditFeature feat);
 int                ffe_feat_excludes(enum FFEditFeature feat1, enum FFEditFeature feat2);
 
-extern const void *ffe_class[1];
+const AVClass **ffe_get_class(void);
+#define ffe_class ffe_get_class()
 
 #endif /* AVUTIL_FFEDIT_H */

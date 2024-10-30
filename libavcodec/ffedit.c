@@ -138,4 +138,10 @@ static const AVClass _ffe_class = {
     .item_name  = av_default_item_name,
     .version    = LIBAVUTIL_VERSION_INT,
 };
-const void *ffe_class[1] = { &_ffe_class };
+
+static const AVClass* __ffe_class = &_ffe_class;
+
+const AVClass **ffe_get_class(void)
+{
+    return &__ffe_class;
+}
