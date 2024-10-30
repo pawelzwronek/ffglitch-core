@@ -67,6 +67,8 @@
 const char program_name[] = "fflive";
 const int program_birth_year = 2003;
 
+extern const void *ffl_class[1];
+
 #define THREAD_TYPE            SDL_Thread *
 #define THREAD_RET_TYPE        int
 #define THREAD_CREATE(thread, func, args) do { thread = SDL_CreateThread(func, #func, args); } while ( 0 )
@@ -525,12 +527,12 @@ static int packet_queue_init(PacketQueue *q)
         return AVERROR(ENOMEM);
     q->mutex = SDL_CreateMutex();
     if (!q->mutex) {
-        av_log(NULL, AV_LOG_FATAL, "SDL_CreateMutex(): %s\n", SDL_GetError());
+        av_log(ffl_class, AV_LOG_FATAL, "SDL_CreateMutex(): %s\n", SDL_GetError());
         return AVERROR(ENOMEM);
     }
     q->cond = SDL_CreateCond();
     if (!q->cond) {
-        av_log(NULL, AV_LOG_FATAL, "SDL_CreateCond(): %s\n", SDL_GetError());
+        av_log(ffl_class, AV_LOG_FATAL, "SDL_CreateCond(): %s\n", SDL_GetError());
         return AVERROR(ENOMEM);
     }
     q->abort_request = 1;
@@ -779,11 +781,11 @@ static int frame_queue_init(FrameQueue *f, PacketQueue *pktq, int max_size, int 
     int i;
     memset(f, 0, sizeof(FrameQueue));
     if (!(f->mutex = SDL_CreateMutex())) {
-        av_log(NULL, AV_LOG_FATAL, "SDL_CreateMutex(): %s\n", SDL_GetError());
+        av_log(ffl_class, AV_LOG_FATAL, "SDL_CreateMutex(): %s\n", SDL_GetError());
         return AVERROR(ENOMEM);
     }
     if (!(f->cond = SDL_CreateCond())) {
-        av_log(NULL, AV_LOG_FATAL, "SDL_CreateCond(): %s\n", SDL_GetError());
+        av_log(ffl_class, AV_LOG_FATAL, "SDL_CreateCond(): %s\n", SDL_GetError());
         return AVERROR(ENOMEM);
     }
     f->pktq = pktq;
@@ -943,7 +945,7 @@ static int realloc_texture(SDL_Texture **texture, Uint32 new_format, int new_wid
             memset(pixels, 0, pitch * new_height);
             SDL_UnlockTexture(*texture);
         }
-        av_log(NULL, AV_LOG_VERBOSE, "Created %dx%d texture with %s.\n", new_width, new_height, SDL_GetPixelFormatName(new_format));
+        av_log(ffl_class, AV_LOG_VERBOSE, "Created %dx%d texture with %s.\n", new_width, new_height, SDL_GetPixelFormatName(new_format));
     }
     return 0;
 }
@@ -1012,7 +1014,7 @@ static int upload_texture(SDL_Texture **tex, AVFrame *frame)
                                                        frame->data[1] + frame->linesize[1] * (AV_CEIL_RSHIFT(frame->height, 1) - 1), -frame->linesize[1],
                                                        frame->data[2] + frame->linesize[2] * (AV_CEIL_RSHIFT(frame->height, 1) - 1), -frame->linesize[2]);
             } else {
-                av_log(NULL, AV_LOG_ERROR, "Mixed negative and positive linesizes are not supported.\n");
+                av_log(ffl_class, AV_LOG_ERROR, "Mixed negative and positive linesizes are not supported.\n");
                 return -1;
             }
             break;
@@ -1091,7 +1093,7 @@ static void video_image_display(VideoState *is)
                             sub_rect->w, sub_rect->h, AV_PIX_FMT_BGRA,
                             0, NULL, NULL, NULL);
                         if (!is->sub_convert_ctx) {
-                            av_log(NULL, AV_LOG_FATAL, "Cannot initialize the conversion context\n");
+                            av_log(ffl_class, AV_LOG_FATAL, "Cannot initialize the conversion context\n");
                             return;
                         }
                         if (!SDL_LockTexture(is->sub_texture, (SDL_Rect *)sub_rect, (void **)pixels, pitch)) {
@@ -1249,7 +1251,7 @@ static void video_audio_display(VideoState *s)
                              0, 1 << rdft_bits, &rdft_scale, 0);
         }
         if (err < 0 || !s->rdft_data) {
-            av_log(NULL, AV_LOG_ERROR, "Failed to allocate buffers for RDFT, switching to waves display\n");
+            av_log(ffl_class, AV_LOG_ERROR, "Failed to allocate buffers for RDFT, switching to waves display\n");
             s->show_mode = SHOW_MODE_WAVES;
         } else {
             float *data_in[2];
@@ -1456,7 +1458,7 @@ static void do_exit(VideoState *is)
     if (show_status)
         printf("\n");
     SDL_Quit();
-    av_log(NULL, AV_LOG_QUIET, "%s", "");
+    av_log(ffl_class, AV_LOG_QUIET, "%s", "");
     exit(0);
 }
 
@@ -1690,7 +1692,7 @@ static double compute_target_delay(double delay, VideoState *is)
         }
     }
 
-    av_log(NULL, AV_LOG_TRACE, "video: delay=%0.3f A-V=%f\n",
+    av_log(ffl_class, AV_LOG_TRACE, "video: delay=%0.3f A-V=%f\n",
             delay, -diff);
 
     return delay;
@@ -1873,7 +1875,7 @@ display:
             if (show_status == 1 && AV_LOG_INFO > av_log_get_level())
                 fprintf(stderr, "%s", buf.str);
             else
-                av_log(NULL, AV_LOG_INFO, "%s", buf.str);
+                av_log(ffl_class, AV_LOG_INFO, "%s", buf.str);
 
             fflush(stderr);
             av_bprint_finalize(&buf, NULL);
@@ -1939,9 +1941,9 @@ static int get_video_frame(VideoState *is, AVFrame *frame)
                     is->frame_drops_early++;
                     if ( !is->frame_drops_warning && sfc != NULL && is->frame_drops_early > 30 )
                     {
-                        av_log(ffe_class, AV_LOG_WARNING, "Too many dropped frames!\n");
-                        av_log(ffe_class, AV_LOG_WARNING, "Perhaps your script is too slow to play in realtime. Optimize it!\n");
-                        av_log(ffe_class, AV_LOG_WARNING, "Make sure it gives speeds at least 1.5x in ffedit while scripting.\n");
+                        av_log(ffl_class, AV_LOG_WARNING, "Too many dropped frames!\n");
+                        av_log(ffl_class, AV_LOG_WARNING, "Perhaps your script is too slow to play in realtime. Optimize it!\n");
+                        av_log(ffl_class, AV_LOG_WARNING, "Make sure it gives speeds at least 1.5x in ffedit while scripting.\n");
                         is->frame_drops_warning = 1;
                     }
                     av_frame_unref(frame);
@@ -2235,7 +2237,7 @@ static int audio_thread(void *arg)
                     char buf1[1024], buf2[1024];
                     av_channel_layout_describe(&is->audio_filter_src.ch_layout, buf1, sizeof(buf1));
                     av_channel_layout_describe(&frame->ch_layout, buf2, sizeof(buf2));
-                    av_log(NULL, AV_LOG_DEBUG,
+                    av_log(ffl_class, AV_LOG_DEBUG,
                            "Audio frame changed from rate:%d ch:%d fmt:%s layout:%s serial:%d to rate:%d ch:%d fmt:%s layout:%s serial:%d\n",
                            is->audio_filter_src.freq, is->audio_filter_src.ch_layout.nb_channels, av_get_sample_fmt_name(is->audio_filter_src.fmt), buf1, last_serial,
                            frame->sample_rate, frame->ch_layout.nb_channels, av_get_sample_fmt_name(frame->format), buf2, is->auddec.pkt_serial);
@@ -2286,7 +2288,7 @@ static int decoder_start(Decoder *d, int (*fn)(void *), const char *thread_name,
     packet_queue_start(d->queue);
     d->decoder_tid = SDL_CreateThread(fn, thread_name, arg);
     if (!d->decoder_tid) {
-        av_log(NULL, AV_LOG_ERROR, "SDL_CreateThread(): %s\n", SDL_GetError());
+        av_log(ffl_class, AV_LOG_ERROR, "SDL_CreateThread(): %s\n", SDL_GetError());
         return AVERROR(ENOMEM);
     }
     return 0;
@@ -2325,7 +2327,7 @@ static int video_thread(void *arg)
             || last_format != frame->format
             || last_serial != is->viddec.pkt_serial
             || last_vfilter_idx != is->vfilter_idx) {
-            av_log(NULL, AV_LOG_DEBUG,
+            av_log(ffl_class, AV_LOG_DEBUG,
                    "Video frame changed from size:%dx%d format:%s serial:%d to size:%dx%d format:%s serial:%d\n",
                    last_w, last_h,
                    (const char *)av_x_if_null(av_get_pix_fmt_name(last_format), "none"), last_serial,
@@ -2499,7 +2501,7 @@ static int synchronize_audio(VideoState *is, int nb_samples)
                     max_nb_samples = ((nb_samples * (100 + SAMPLE_CORRECTION_PERCENT_MAX) / 100));
                     wanted_nb_samples = av_clip(wanted_nb_samples, min_nb_samples, max_nb_samples);
                 }
-                av_log(NULL, AV_LOG_TRACE, "diff=%f adiff=%f sample_diff=%d apts=%0.3f %f\n",
+                av_log(ffl_class, AV_LOG_TRACE, "diff=%f adiff=%f sample_diff=%d apts=%0.3f %f\n",
                         diff, avg_diff, wanted_nb_samples - nb_samples,
                         is->audio_clock, is->audio_diff_threshold);
             }
@@ -2560,7 +2562,7 @@ static int audio_decode_frame(VideoState *is)
                             &af->frame->ch_layout, af->frame->format, af->frame->sample_rate,
                             0, NULL);
         if (!is->swr_ctx || swr_init(is->swr_ctx) < 0) {
-            av_log(NULL, AV_LOG_ERROR,
+            av_log(ffl_class, AV_LOG_ERROR,
                    "Cannot create sample rate converter for conversion of %d Hz %s %d channels to %d Hz %s %d channels!\n",
                     af->frame->sample_rate, av_get_sample_fmt_name(af->frame->format), af->frame->ch_layout.nb_channels,
                     is->audio_tgt.freq, av_get_sample_fmt_name(is->audio_tgt.fmt), is->audio_tgt.ch_layout.nb_channels);
@@ -2580,13 +2582,13 @@ static int audio_decode_frame(VideoState *is)
         int out_size  = av_samples_get_buffer_size(NULL, is->audio_tgt.ch_layout.nb_channels, out_count, is->audio_tgt.fmt, 0);
         int len2;
         if (out_size < 0) {
-            av_log(NULL, AV_LOG_ERROR, "av_samples_get_buffer_size() failed\n");
+            av_log(ffl_class, AV_LOG_ERROR, "av_samples_get_buffer_size() failed\n");
             return -1;
         }
         if (wanted_nb_samples != af->frame->nb_samples) {
             if (swr_set_compensation(is->swr_ctx, (wanted_nb_samples - af->frame->nb_samples) * is->audio_tgt.freq / af->frame->sample_rate,
                                         wanted_nb_samples * is->audio_tgt.freq / af->frame->sample_rate) < 0) {
-                av_log(NULL, AV_LOG_ERROR, "swr_set_compensation() failed\n");
+                av_log(ffl_class, AV_LOG_ERROR, "swr_set_compensation() failed\n");
                 return -1;
             }
         }
@@ -2595,11 +2597,11 @@ static int audio_decode_frame(VideoState *is)
             return AVERROR(ENOMEM);
         len2 = swr_convert(is->swr_ctx, out, out_count, in, af->frame->nb_samples);
         if (len2 < 0) {
-            av_log(NULL, AV_LOG_ERROR, "swr_convert() failed\n");
+            av_log(ffl_class, AV_LOG_ERROR, "swr_convert() failed\n");
             return -1;
         }
         if (len2 == out_count) {
-            av_log(NULL, AV_LOG_WARNING, "audio buffer is probably too small\n");
+            av_log(ffl_class, AV_LOG_WARNING, "audio buffer is probably too small\n");
             if (swr_init(is->swr_ctx) < 0)
                 swr_free(&is->swr_ctx);
         }
@@ -2696,7 +2698,7 @@ static int audio_open(void *opaque, AVChannelLayout *wanted_channel_layout, int 
     wanted_spec.channels = wanted_nb_channels;
     wanted_spec.freq = wanted_sample_rate;
     if (wanted_spec.freq <= 0 || wanted_spec.channels <= 0) {
-        av_log(NULL, AV_LOG_ERROR, "Invalid sample rate or channel count!\n");
+        av_log(ffl_class, AV_LOG_ERROR, "Invalid sample rate or channel count!\n");
         return -1;
     }
     while (next_sample_rate_idx && next_sample_rates[next_sample_rate_idx] >= wanted_spec.freq)
@@ -2707,14 +2709,14 @@ static int audio_open(void *opaque, AVChannelLayout *wanted_channel_layout, int 
     wanted_spec.callback = sdl_audio_callback;
     wanted_spec.userdata = opaque;
     while (!(audio_dev = SDL_OpenAudioDevice(NULL, 0, &wanted_spec, &spec, SDL_AUDIO_ALLOW_FREQUENCY_CHANGE | SDL_AUDIO_ALLOW_CHANNELS_CHANGE))) {
-        av_log(NULL, AV_LOG_WARNING, "SDL_OpenAudio (%d channels, %d Hz): %s\n",
+        av_log(ffl_class, AV_LOG_WARNING, "SDL_OpenAudio (%d channels, %d Hz): %s\n",
                wanted_spec.channels, wanted_spec.freq, SDL_GetError());
         wanted_spec.channels = next_nb_channels[FFMIN(7, wanted_spec.channels)];
         if (!wanted_spec.channels) {
             wanted_spec.freq = next_sample_rates[next_sample_rate_idx--];
             wanted_spec.channels = wanted_nb_channels;
             if (!wanted_spec.freq) {
-                av_log(NULL, AV_LOG_ERROR,
+                av_log(ffl_class, AV_LOG_ERROR,
                        "No more combinations to try, audio open failed\n");
                 return -1;
             }
@@ -2722,7 +2724,7 @@ static int audio_open(void *opaque, AVChannelLayout *wanted_channel_layout, int 
         av_channel_layout_default(wanted_channel_layout, wanted_spec.channels);
     }
     if (spec.format != AUDIO_S16SYS) {
-        av_log(NULL, AV_LOG_ERROR,
+        av_log(ffl_class, AV_LOG_ERROR,
                "SDL advised audio format %d is not supported!\n", spec.format);
         return -1;
     }
@@ -2730,7 +2732,7 @@ static int audio_open(void *opaque, AVChannelLayout *wanted_channel_layout, int 
         av_channel_layout_uninit(wanted_channel_layout);
         av_channel_layout_default(wanted_channel_layout, spec.channels);
         if (wanted_channel_layout->order != AV_CHANNEL_ORDER_NATIVE) {
-            av_log(NULL, AV_LOG_ERROR,
+            av_log(ffl_class, AV_LOG_ERROR,
                    "SDL advised channel count %d is not supported!\n", spec.channels);
             return -1;
         }
@@ -2743,7 +2745,7 @@ static int audio_open(void *opaque, AVChannelLayout *wanted_channel_layout, int 
     audio_hw_params->frame_size = av_samples_get_buffer_size(NULL, audio_hw_params->ch_layout.nb_channels, 1, audio_hw_params->fmt, 1);
     audio_hw_params->bytes_per_sec = av_samples_get_buffer_size(NULL, audio_hw_params->ch_layout.nb_channels, audio_hw_params->freq, audio_hw_params->fmt, 1);
     if (audio_hw_params->bytes_per_sec <= 0 || audio_hw_params->frame_size <= 0) {
-        av_log(NULL, AV_LOG_ERROR, "av_samples_get_buffer_size failed\n");
+        av_log(ffl_class, AV_LOG_ERROR, "av_samples_get_buffer_size failed\n");
         return -1;
     }
     return spec.size;
@@ -2775,7 +2777,7 @@ static int create_hwaccel(AVBufferRef **device_ctx)
     if (ret != AVERROR(ENOSYS))
         return ret;
 
-    av_log(NULL, AV_LOG_WARNING, "Derive %s from vulkan not supported.\n", hwaccel);
+    av_log(ffl_class, AV_LOG_WARNING, "Derive %s from vulkan not supported.\n", hwaccel);
     ret = av_hwdevice_ctx_create(device_ctx, type, NULL, NULL, 0);
     return ret;
 }
@@ -2817,9 +2819,9 @@ static int stream_component_open(VideoState *is, int stream_index)
     if (forced_codec_name)
         codec = avcodec_find_decoder_by_name(forced_codec_name);
     if (!codec) {
-        if (forced_codec_name) av_log(NULL, AV_LOG_WARNING,
+        if (forced_codec_name) av_log(ffl_class, AV_LOG_WARNING,
                                       "No codec could be found with name '%s'\n", forced_codec_name);
-        else                   av_log(NULL, AV_LOG_WARNING,
+        else                   av_log(ffl_class, AV_LOG_WARNING,
                                       "No decoder could be found for codec %s\n", avcodec_get_name(avctx->codec_id));
         ret = AVERROR(EINVAL);
         goto fail;
@@ -2866,13 +2868,13 @@ static int stream_component_open(VideoState *is, int stream_index)
 
         if ( avctx->codec_type != AVMEDIA_TYPE_VIDEO )
         {
-            av_log(ffe_class, AV_LOG_ERROR, "Skipping non-video codec '%s'\n", codec->long_name);
+            av_log(ffl_class, AV_LOG_ERROR, "Skipping non-video codec '%s'\n", codec->long_name);
             break;
         }
 
         if ( (codec->capabilities & AV_CODEC_CAP_FFEDIT_BITSTREAM) == 0 )
         {
-            av_log(ffe_class, AV_LOG_ERROR, "Codec '%s' not supported by ffedit. Skipping\n", codec->long_name);
+            av_log(ffl_class, AV_LOG_ERROR, "Codec '%s' not supported by ffedit. Skipping\n", codec->long_name);
             break;
         }
 
@@ -2907,7 +2909,7 @@ static int stream_component_open(VideoState *is, int stream_index)
         goto fail;
     }
     if ((t = av_dict_get(opts, "", NULL, AV_DICT_IGNORE_SUFFIX))) {
-        av_log(NULL, AV_LOG_ERROR, "Option %s not found.\n", t->key);
+        av_log(ffl_class, AV_LOG_ERROR, "Option %s not found.\n", t->key);
         ret =  AVERROR_OPTION_NOT_FOUND;
         goto fail;
     }
@@ -3053,7 +3055,7 @@ static int read_thread(void *arg)
     int64_t pkt_ts;
 
     if (!wait_mutex) {
-        av_log(NULL, AV_LOG_FATAL, "SDL_CreateMutex(): %s\n", SDL_GetError());
+        av_log(ffl_class, AV_LOG_FATAL, "SDL_CreateMutex(): %s\n", SDL_GetError());
         ret = AVERROR(ENOMEM);
         goto fail;
     }
@@ -3063,13 +3065,13 @@ static int read_thread(void *arg)
 
     pkt = av_packet_alloc();
     if (!pkt) {
-        av_log(NULL, AV_LOG_FATAL, "Could not allocate packet.\n");
+        av_log(ffl_class, AV_LOG_FATAL, "Could not allocate packet.\n");
         ret = AVERROR(ENOMEM);
         goto fail;
     }
     ic = avformat_alloc_context();
     if (!ic) {
-        av_log(NULL, AV_LOG_FATAL, "Could not allocate context.\n");
+        av_log(ffl_class, AV_LOG_FATAL, "Could not allocate context.\n");
         ret = AVERROR(ENOMEM);
         goto fail;
     }
@@ -3098,7 +3100,7 @@ static int read_thread(void *arg)
         exit(1);
 
     if ((t = av_dict_get(format_opts, "", NULL, AV_DICT_IGNORE_SUFFIX))) {
-        av_log(NULL, AV_LOG_ERROR, "Option %s not found.\n", t->key);
+        av_log(ffl_class, AV_LOG_ERROR, "Option %s not found.\n", t->key);
         ret = AVERROR_OPTION_NOT_FOUND;
         goto fail;
     }
@@ -3113,7 +3115,7 @@ static int read_thread(void *arg)
 
         err = setup_find_stream_info_opts(ic, codec_opts, &opts);
         if (err < 0) {
-            av_log(NULL, AV_LOG_ERROR,
+            av_log(ffl_class, AV_LOG_ERROR,
                    "Error setting up avformat_find_stream_info() options\n");
             ret = err;
             goto fail;
@@ -3126,7 +3128,7 @@ static int read_thread(void *arg)
         av_freep(&opts);
 
         if (err < 0) {
-            av_log(NULL, AV_LOG_WARNING,
+            av_log(ffl_class, AV_LOG_WARNING,
                    "%s: could not find codec parameters\n", is->filename);
             ret = -1;
             goto fail;
@@ -3156,7 +3158,7 @@ static int read_thread(void *arg)
             timestamp += ic->start_time;
         ret = avformat_seek_file(ic, -1, INT64_MIN, timestamp, INT64_MAX, 0);
         if (ret < 0) {
-            av_log(NULL, AV_LOG_WARNING, "%s: could not seek to position %0.3f\n",
+            av_log(ffl_class, AV_LOG_WARNING, "%s: could not seek to position %0.3f\n",
                     is->filename, (double)timestamp / AV_TIME_BASE);
         }
     }
@@ -3176,7 +3178,7 @@ static int read_thread(void *arg)
     }
     for (i = 0; i < AVMEDIA_TYPE_NB; i++) {
         if (wanted_stream_spec[i] && st_index[i] == -1) {
-            av_log(NULL, AV_LOG_ERROR, "Stream specifier %s does not match any %s stream\n", wanted_stream_spec[i], av_get_media_type_string(i));
+            av_log(ffl_class, AV_LOG_ERROR, "Stream specifier %s does not match any %s stream\n", wanted_stream_spec[i], av_get_media_type_string(i));
             st_index[i] = INT_MAX;
         }
     }
@@ -3226,7 +3228,7 @@ static int read_thread(void *arg)
     }
 
     if (is->video_stream < 0 && is->audio_stream < 0) {
-        av_log(NULL, AV_LOG_FATAL, "Failed to open file '%s' or configure filtergraph\n",
+        av_log(ffl_class, AV_LOG_FATAL, "Failed to open file '%s' or configure filtergraph\n",
                is->filename);
         ret = -1;
         goto fail;
@@ -3278,7 +3280,7 @@ static int read_thread(void *arg)
 
             ret = avformat_seek_file(is->ic, -1, seek_min, seek_target, seek_max, is->seek_flags);
             if (ret < 0) {
-                av_log(NULL, AV_LOG_ERROR,
+                av_log(ffl_class, AV_LOG_ERROR,
                        "%s: error while seeking\n", is->ic->url);
             } else {
                 if (is->audio_stream >= 0)
@@ -3441,7 +3443,7 @@ static VideoState *stream_open(const char *filename,
         goto fail;
 
     if (!(is->continue_read_thread = SDL_CreateCond())) {
-        av_log(NULL, AV_LOG_FATAL, "SDL_CreateCond(): %s\n", SDL_GetError());
+        av_log(ffl_class, AV_LOG_FATAL, "SDL_CreateCond(): %s\n", SDL_GetError());
         goto fail;
     }
 
@@ -3450,9 +3452,9 @@ static VideoState *stream_open(const char *filename,
     init_clock(&is->extclk, &is->extclk.serial);
     is->audio_clock_serial = -1;
     if (startup_volume < 0)
-        av_log(NULL, AV_LOG_WARNING, "-volume=%d < 0, setting to 0\n", startup_volume);
+        av_log(ffl_class, AV_LOG_WARNING, "-volume=%d < 0, setting to 0\n", startup_volume);
     if (startup_volume > 100)
-        av_log(NULL, AV_LOG_WARNING, "-volume=%d > 100, setting to 100\n", startup_volume);
+        av_log(ffl_class, AV_LOG_WARNING, "-volume=%d > 100, setting to 100\n", startup_volume);
     startup_volume = av_clip(startup_volume, 0, 100);
     startup_volume = av_clip(SDL_MIX_MAXVOLUME * startup_volume / 100, 0, SDL_MIX_MAXVOLUME);
     is->audio_volume = startup_volume;
@@ -3460,7 +3462,7 @@ static VideoState *stream_open(const char *filename,
     is->av_sync_type = av_sync_type;
     is->read_tid     = SDL_CreateThread(read_thread, "read_thread", is);
     if (!is->read_tid) {
-        av_log(NULL, AV_LOG_FATAL, "SDL_CreateThread(): %s\n", SDL_GetError());
+        av_log(ffl_class, AV_LOG_FATAL, "SDL_CreateThread(): %s\n", SDL_GetError());
 fail:
         stream_close(is);
         return NULL;
@@ -3537,7 +3539,7 @@ static void stream_cycle_channel(VideoState *is, int codec_type)
  the_end:
     if (p && stream_index != -1)
         stream_index = p->stream_index[stream_index];
-    av_log(NULL, AV_LOG_INFO, "Switch %s stream from #%d to #%d\n",
+    av_log(ffl_class, AV_LOG_INFO, "Switch %s stream from #%d to #%d\n",
            av_get_media_type_string(codec_type),
            old_index,
            stream_index);
@@ -3611,7 +3613,7 @@ static void seek_chapter(VideoState *is, int incr)
     if (i >= is->ic->nb_chapters)
         return;
 
-    av_log(NULL, AV_LOG_VERBOSE, "Seeking to chapter %d.\n", i);
+    av_log(ffl_class, AV_LOG_VERBOSE, "Seeking to chapter %d.\n", i);
     stream_seek(is, av_rescale_q(is->ic->chapters[i]->start, is->ic->chapters[i]->time_base,
                                  AV_TIME_BASE_Q), 0, 0);
 }
@@ -3798,7 +3800,7 @@ static void event_loop(VideoState *cur_stream)
                     hh   = ns / 3600;
                     mm   = (ns % 3600) / 60;
                     ss   = (ns % 60);
-                    av_log(NULL, AV_LOG_INFO,
+                    av_log(ffl_class, AV_LOG_INFO,
                            "Seek to %2.0f%% (%2d:%02d:%02d) of total duration (%2d:%02d:%02d)       \n", frac*100,
                             hh, mm, ss, thh, tmm, tss);
                     ts = frac * cur_stream->ic->duration;
@@ -3858,7 +3860,7 @@ static int opt_format(void *optctx, const char *opt, const char *arg)
 {
     file_iformat = av_find_input_format(arg);
     if (!file_iformat) {
-        av_log(NULL, AV_LOG_FATAL, "Unknown input format: %s\n", arg);
+        av_log(ffl_class, AV_LOG_FATAL, "Unknown input format: %s\n", arg);
         return AVERROR(EINVAL);
     }
     return 0;
@@ -3873,7 +3875,7 @@ static int opt_sync(void *optctx, const char *opt, const char *arg)
     else if (!strcmp(arg, "ext"))
         av_sync_type = AV_SYNC_EXTERNAL_CLOCK;
     else {
-        av_log(NULL, AV_LOG_ERROR, "Unknown value for %s: %s\n", opt, arg);
+        av_log(ffl_class, AV_LOG_ERROR, "Unknown value for %s: %s\n", opt, arg);
         exit(1);
     }
     return 0;
@@ -3898,7 +3900,7 @@ static int opt_show_mode(void *optctx, const char *opt, const char *arg)
 static int opt_input_file(void *optctx, const char *filename)
 {
     if (input_filename) {
-        av_log(NULL, AV_LOG_FATAL,
+        av_log(ffl_class, AV_LOG_FATAL,
                "Argument '%s' provided as input filename, but '%s' was already specified.\n",
                 filename, input_filename);
         return AVERROR(EINVAL);
@@ -3917,7 +3919,7 @@ static int opt_codec(void *optctx, const char *opt, const char *arg)
    const char *spec = strchr(opt, ':');
    const char **name;
    if (!spec) {
-       av_log(NULL, AV_LOG_ERROR,
+       av_log(ffl_class, AV_LOG_ERROR,
               "No media specifier was specified in '%s' in option '%s'\n",
                arg, opt);
        return AVERROR(EINVAL);
@@ -3929,7 +3931,7 @@ static int opt_codec(void *optctx, const char *opt, const char *arg)
    case 's' : name = &subtitle_codec_name; break;
    case 'v' : name = &video_codec_name;    break;
    default:
-       av_log(NULL, AV_LOG_ERROR,
+       av_log(ffl_class, AV_LOG_ERROR,
               "Invalid media specifier '%s' in option '%s'\n", spec, opt);
        return AVERROR(EINVAL);
    }
@@ -4002,9 +4004,9 @@ static const OptionDef options[] = {
 
 static void show_usage(void)
 {
-    av_log(NULL, AV_LOG_INFO, "Simple media player\n");
-    av_log(NULL, AV_LOG_INFO, "usage: %s [options] input_file\n", program_name);
-    av_log(NULL, AV_LOG_INFO, "\n");
+    av_log(ffl_class, AV_LOG_INFO, "Simple media player\n");
+    av_log(ffl_class, AV_LOG_INFO, "usage: %s [options] input_file\n", program_name);
+    av_log(ffl_class, AV_LOG_INFO, "\n");
 }
 
 void show_help_default(const char *opt, const char *arg)
@@ -4068,8 +4070,8 @@ int main(int argc, char **argv)
 
     if (!input_filename) {
         show_usage();
-        av_log(NULL, AV_LOG_FATAL, "An input file must be specified\n");
-        av_log(NULL, AV_LOG_FATAL,
+        av_log(ffl_class, AV_LOG_FATAL, "An input file must be specified\n");
+        av_log(ffl_class, AV_LOG_FATAL,
                "Use -h to get full help\n");
         exit(1);
     }
@@ -4090,8 +4092,8 @@ int main(int argc, char **argv)
         flags &= ~SDL_INIT_VIDEO;
     flags |= SDL_INIT_GAMECONTROLLER; /* ffglitch */
     if (SDL_Init (flags)) {
-        av_log(NULL, AV_LOG_FATAL, "Could not initialize SDL - %s\n", SDL_GetError());
-        av_log(NULL, AV_LOG_FATAL, "(Did you set the DISPLAY variable?)\n");
+        av_log(ffl_class, AV_LOG_FATAL, "Could not initialize SDL - %s\n", SDL_GetError());
+        av_log(ffl_class, AV_LOG_FATAL, "(Did you set the DISPLAY variable?)\n");
         exit(1);
     }
 
@@ -4104,7 +4106,7 @@ int main(int argc, char **argv)
 #if SDL_VERSION_ATLEAST(2,0,5)
             flags |= SDL_WINDOW_ALWAYS_ON_TOP;
 #else
-            av_log(NULL, AV_LOG_WARNING, "Your SDL version doesn't support SDL_WINDOW_ALWAYS_ON_TOP. Feature will be inactive.\n");
+            av_log(ffl_class, AV_LOG_WARNING, "Your SDL version doesn't support SDL_WINDOW_ALWAYS_ON_TOP. Feature will be inactive.\n");
 #endif
         if (borderless)
             flags |= SDL_WINDOW_BORDERLESS;
@@ -4115,7 +4117,7 @@ int main(int argc, char **argv)
         SDL_SetHint(SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR, "0");
 #endif
         if (hwaccel && !enable_vulkan) {
-            av_log(NULL, AV_LOG_INFO, "Enable vulkan renderer to support hwaccel %s\n", hwaccel);
+            av_log(ffl_class, AV_LOG_INFO, "Enable vulkan renderer to support hwaccel %s\n", hwaccel);
             enable_vulkan = 1;
         }
         if (enable_vulkan) {
@@ -4125,7 +4127,7 @@ int main(int argc, char **argv)
                 flags |= SDL_WINDOW_VULKAN;
 #endif
             } else {
-                av_log(NULL, AV_LOG_WARNING, "Doesn't support vulkan renderer, fallback to SDL renderer\n");
+                av_log(ffl_class, AV_LOG_WARNING, "Doesn't support vulkan renderer, fallback to SDL renderer\n");
                 enable_vulkan = 0;
             }
         }
@@ -4134,7 +4136,7 @@ int main(int argc, char **argv)
             scaling_quality = "linear";
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, scaling_quality);
         if (!window) {
-            av_log(NULL, AV_LOG_FATAL, "Failed to create window: %s", SDL_GetError());
+            av_log(ffl_class, AV_LOG_FATAL, "Failed to create window: %s", SDL_GetError());
             do_exit(NULL);
         }
 
@@ -4146,21 +4148,21 @@ int main(int argc, char **argv)
             ret = vk_renderer_create(vk_renderer, window, dict);
             av_dict_free(&dict);
             if (ret < 0) {
-                av_log(NULL, AV_LOG_FATAL, "Failed to create vulkan renderer, %s\n", av_err2str(ret));
+                av_log(ffl_class, AV_LOG_FATAL, "Failed to create vulkan renderer, %s\n", av_err2str(ret));
                 do_exit(NULL);
             }
         } else {
             renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
             if (!renderer) {
-                av_log(NULL, AV_LOG_WARNING, "Failed to initialize a hardware accelerated renderer: %s\n", SDL_GetError());
+                av_log(ffl_class, AV_LOG_WARNING, "Failed to initialize a hardware accelerated renderer: %s\n", SDL_GetError());
                 renderer = SDL_CreateRenderer(window, -1, 0);
             }
             if (renderer) {
                 if (!SDL_GetRendererInfo(renderer, &renderer_info))
-                    av_log(NULL, AV_LOG_VERBOSE, "Initialized %s renderer.\n", renderer_info.name);
+                    av_log(ffl_class, AV_LOG_VERBOSE, "Initialized %s renderer.\n", renderer_info.name);
             }
             if (!renderer || !renderer_info.num_texture_formats) {
-                av_log(NULL, AV_LOG_FATAL, "Failed to create window or renderer: %s", SDL_GetError());
+                av_log(ffl_class, AV_LOG_FATAL, "Failed to create window or renderer: %s", SDL_GetError());
                 do_exit(NULL);
             }
         }
@@ -4178,8 +4180,8 @@ int main(int argc, char **argv)
 
         if ( features_selected == 0 )
         {
-            av_log(ffe_class, AV_LOG_FATAL, "At least one feature must be selected!\n");
-            av_log(ffe_class, AV_LOG_FATAL, "Select features by adding them to args[\"features\"] in your script's setup().\n");
+            av_log(ffl_class, AV_LOG_FATAL, "At least one feature must be selected!\n");
+            av_log(ffl_class, AV_LOG_FATAL, "Select features by adding them to args[\"features\"] in your script's setup().\n");
             exit(1);
         }
 
@@ -4203,7 +4205,7 @@ int main(int argc, char **argv)
 
     is = stream_open(input_filename, file_iformat);
     if (!is) {
-        av_log(NULL, AV_LOG_FATAL, "Failed to initialize VideoState!\n");
+        av_log(ffl_class, AV_LOG_FATAL, "Failed to initialize VideoState!\n");
         do_exit(NULL);
     }
 
@@ -4213,3 +4215,9 @@ int main(int argc, char **argv)
 
     return 0;
 }
+
+static const AVClass _ffl_class = {
+    .class_name = "FFLive",
+    .item_name  = av_default_item_name,
+};
+const void *ffl_class[1] = { &_ffl_class };
