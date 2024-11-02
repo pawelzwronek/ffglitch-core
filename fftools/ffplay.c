@@ -372,6 +372,7 @@ static int borderless;
 static int alwaysontop;
 static int startup_volume = 100;
 static int show_status = -1;
+static int print_frameno = 0;
 static int av_sync_type = AV_SYNC_AUDIO_MASTER;
 static int64_t start_time = AV_NOPTS_VALUE;
 static int64_t duration = AV_NOPTS_VALUE;
@@ -379,6 +380,7 @@ static int fast = 0;
 static int genpts = 0;
 static int lowres = 0;
 static int decoder_reorder_pts = -1;
+static int start_paused;
 static int autoexit;
 static int exit_on_keydown;
 static int exit_on_mousedown;
@@ -407,6 +409,9 @@ static int asap = 0;
 /* current context */
 static int is_full_screen;
 static int64_t audio_callback_time;
+static int64_t frame_no = 0;
+
+static void toggle_pause(VideoState *is);
 
 #define FF_QUIT_EVENT    (SDL_USEREVENT + 2)
 
@@ -1509,6 +1514,11 @@ static void video_display(VideoState *is)
     else if (is->video_st)
         video_image_display(is);
     SDL_RenderPresent(renderer);
+
+    if (start_paused) {
+        toggle_pause(is);
+        start_paused = 0;
+    }
 }
 
 static double get_clock(Clock *c)
@@ -1907,6 +1917,10 @@ static int queue_picture(VideoState *is, AVFrame *src_frame, double pts, double 
 
     av_frame_move_ref(vp->frame, src_frame);
     frame_queue_push(&is->pictq);
+
+    if (print_frameno) {
+        av_log(ffl_class, AV_LOG_INFO, "FRAME_NO: %"PRId64"\n", frame_no++);
+    }
     return 0;
 }
 
@@ -3994,6 +4008,10 @@ static const OptionDef options[] = {
     { "sp",                 OPT_TYPE_STRING,          0, { &script_params }, "ffglitch script setup() parameters", "JSON string" },
     { "o",                  OPT_TYPE_STRING,          0, { &output_fname }, "ffglitch output file", "file" },
     { NULL, },
+
+    /* custom fflive */
+    { "print_frameno",      OPT_TYPE_BOOL, OPT_VIDEO | OPT_EXPERT, { &print_frameno }, "print frame number on each frame" },
+    { "start_paused",       OPT_TYPE_BOOL,   OPT_EXPERT, { &start_paused }, "start with paused video" },
 };
 
 static void show_usage(void)
