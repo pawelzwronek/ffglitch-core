@@ -4007,11 +4007,13 @@ static const OptionDef options[] = {
     { "s",                  OPT_TYPE_STRING,          0, { &script_fname }, "ffglitch script", "javascript or python3 file" },
     { "sp",                 OPT_TYPE_STRING,          0, { &script_params }, "ffglitch script setup() parameters", "JSON string" },
     { "o",                  OPT_TYPE_STRING,          0, { &output_fname }, "ffglitch output file", "file" },
-    { NULL, },
 
     /* custom fflive */
-    { "print_frameno",      OPT_TYPE_BOOL, OPT_VIDEO | OPT_EXPERT, { &print_frameno }, "print frame number on each frame" },
+    { "frame_counter_off",  OPT_TYPE_INT64,  OPT_EXPERT, { &current_frame_num }, "ffglitch script frame counter offset", "" },
+    { "print_frameno",      OPT_TYPE_BOOL, OPT_VIDEO | OPT_EXPERT, { &print_frameno }, "print frame number on each frame", "" },
     { "start_paused",       OPT_TYPE_BOOL,   OPT_EXPERT, { &start_paused }, "start with paused video" },
+
+    { NULL, },
 };
 
 static void show_usage(void)

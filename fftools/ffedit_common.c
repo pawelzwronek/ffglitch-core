@@ -1,9 +1,16 @@
+/* must come after cmdutils.h because of GROW_ARRAY() */
+#include "libavutil/script.h"
+
+#include "libavformat/ffedit.h"
+#include "libavcodec/ffedit.h"
 
 /* command-line options */
 static const char *input_fname;
 static const char *output_fname;
 static const char *script_fname;
 static const char *script_params;
+static int64_t current_frame_num = 0;
+
 /* TODO use avformat_match_stream_specifier */
 static int selected_features[FFEDIT_FEAT_LAST];
 static int selected_features_idx[FFEDIT_FEAT_LAST];
@@ -306,6 +313,7 @@ static void ffedit_common_setup(
     json_t *features;
     json_t *args;
     json_t *o_fname;
+    json_t *frame_num;
     FFScriptObject *frame = NULL;
     size_t len;
     int ret;
@@ -335,6 +343,10 @@ static void ffedit_common_setup(
         o_fname = json_string_new(&jctx, output_fname);
         json_object_add(args, "output", o_fname);
     }
+
+    frame_num = json_int_new(&jctx, current_frame_num);
+    json_object_add(args, "frame_num", frame_num);
+
     if ( script_params != NULL )
     {
         json_t *params = json_parse(&jctx, script_params);
@@ -516,6 +528,10 @@ static THREAD_RET_TYPE script_func(void *arg)
         for ( size_t i = 0; i < FFEDIT_FEAT_LAST; i++ )
             if ( ipkt.ffedit_sd[i] != NULL )
                 json_object_add(jargs, ffe_feat_to_str(i), ipkt.ffedit_sd[i]);
+
+        json_t *frame_num = json_int_new(ipkt.jctx, current_frame_num++);
+        json_object_add(jargs, "frame_num", frame_num);
+
         json_object_done(ipkt.jctx, jargs);
         frame = (FFScriptObject *) ff_script_from_json(script, jargs);
         /* free jctx from ipkt, we no longer need it */
