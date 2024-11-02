@@ -3650,7 +3650,7 @@ static void event_loop(VideoState *cur_stream)
             case SDL_CONTROLLERBUTTONDOWN:
             case SDL_CONTROLLERBUTTONUP:
                 ff_quickjs_sdl_event_add(&event);
-                break;
+                continue; // skip the rest of the event loop
             }
         }
         switch (event.type) {
