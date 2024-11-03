@@ -48,6 +48,7 @@
 #include "libswscale/swscale.h"
 #include "libavutil/opt.h"
 #include "libavutil/tx.h"
+#include "libavutil/zeromq/include/zmq.h"
 #include "libswresample/swresample.h"
 
 #include "libavfilter/avfilter.h"
@@ -406,10 +407,30 @@ static const char *hwaccel = NULL;
 static const char *scaling_quality = NULL;
 static int asap = 0;
 
+/* custom fflive */
+static const char *zmq_url;
+static int noframedropearly = 0;
+static int blockffplaykeys = 0;
+
 /* current context */
 static int is_full_screen;
 static int64_t audio_callback_time;
 static int64_t frame_no = 0;
+typedef struct ZMQContext {
+    const AVClass *class;
+    void *context;
+    void *socket;
+    char *url;
+    SDL_Thread *poll_tid;
+    int stop_thread;
+    void *thread_data;
+} ZMQContext;
+#define ZMQ_STRERROR zmq_strerror(zmq_errno())
+
+ZMQContext *zmq_ctrl_ctx;
+static ZMQContext* create_zmq_socket(VideoState *is, const char *ipc_url);
+static void destroy_zmq_socket(ZMQContext *zmq_ctrl_ctx);
+static int poll_zmq_socket(void *socket, int timeout, VideoState *is);
 
 static void toggle_pause(VideoState *is);
 
@@ -1429,6 +1450,10 @@ static void stream_close(VideoState *is)
 
 static void do_exit(VideoState *is)
 {
+    if (zmq_ctrl_ctx) {
+        destroy_zmq_socket(zmq_ctrl_ctx);
+    }
+
     if (is) {
         stream_close(is);
     }
@@ -1939,7 +1964,7 @@ static int get_video_frame(VideoState *is, AVFrame *frame)
 
         frame->sample_aspect_ratio = av_guess_sample_aspect_ratio(is->ic, is->video_st, frame);
 
-        if (framedrop>0 || (framedrop && get_master_sync_type(is) != AV_SYNC_VIDEO_MASTER)) {
+        if ((framedrop>0 || (framedrop && get_master_sync_type(is) != AV_SYNC_VIDEO_MASTER)) && !noframedropearly) {
             if (frame->pts != AV_NOPTS_VALUE) {
                 double diff = dpts - get_master_clock(is);
                 if (!isnan(diff) && fabs(diff) < AV_NOSYNC_THRESHOLD &&
@@ -2231,6 +2256,11 @@ static int audio_thread(void *arg)
         if ((got_frame = decoder_decode_frame(&is->auddec, frame, NULL)) < 0)
             goto the_end;
 
+        if (start_paused) {
+            toggle_pause(is);
+            start_paused = 0;
+        }
+
         if (got_frame) {
                 tb = (AVRational){1, frame->sample_rate};
 
@@ -2300,6 +2330,234 @@ static int decoder_start(Decoder *d, int (*fn)(void *), const char *thread_name,
         return AVERROR(ENOMEM);
     }
     return 0;
+}
+
+static int zmq_thread(void *arg) {
+    ZMQContext *ctx = arg;
+    VideoState *is = ctx->thread_data;
+    av_log(ffl_class, AV_LOG_DEBUG, "ZMQ thread started\n");
+    while(!ctx->stop_thread) {
+        poll_zmq_socket(ctx->socket, 50, is);
+    }
+    av_log(ffl_class, AV_LOG_DEBUG, "ZMQ thread ended\n");
+    return 0;
+}
+
+static ZMQContext* create_zmq_socket(VideoState *is, const char *ipc_url) {
+    int ret = 0;
+
+    ZMQContext* ctx = av_mallocz(sizeof(ZMQContext));
+    if(!ctx) {
+        return NULL;
+    }
+    ctx->context = zmq_ctx_new();
+    if (!ctx->context) {
+        av_log(ffl_class, AV_LOG_ERROR, "Error occurred during zmq_ctx_new()\n");
+        return NULL;
+    }
+
+    ctx->socket = zmq_socket(ctx->context, ZMQ_REP);
+    if (!ctx->socket) {
+        av_log(ffl_class, AV_LOG_ERROR, "Error occurred during zmq_socket(): %s\n", ZMQ_STRERROR);
+        zmq_ctx_term(ctx->context);
+        return NULL;
+    }
+
+    ret = zmq_bind(ctx->socket, ipc_url);
+    if (ret == -1) {
+        av_log(ffl_class, AV_LOG_ERROR, "Error occurred during zmq_bind() to %s: %s\n", ipc_url, ZMQ_STRERROR);
+        goto zmq_fail;
+    } else {
+        ctx->url = av_strdup(ipc_url);
+        av_log(ffl_class, AV_LOG_DEBUG, "Bound to IPC socket: %s\n", ipc_url);
+    }
+
+    ctx->stop_thread = 0;
+    ctx->thread_data = is;
+    ctx->poll_tid = SDL_CreateThread(zmq_thread, "zmq_thread", ctx);
+    if (!ctx->poll_tid) {
+        av_log(ffl_class, AV_LOG_ERROR, "SDL_CreateThread(): %s\n", SDL_GetError());
+        goto zmq_fail;
+    }
+
+    return ctx;
+zmq_fail:
+    if (ctx->url) {
+        av_freep(&ctx->url);
+    }
+    zmq_close(ctx->socket);
+    zmq_ctx_term(ctx->context);
+    return NULL;
+}
+
+
+static void destroy_zmq_socket(ZMQContext *ctx) {
+    ctx->stop_thread = 1;
+    SDL_WaitThread(ctx->poll_tid, NULL);
+    ctx->poll_tid = NULL;
+
+    if (ctx->socket) {
+        zmq_close(ctx->socket);
+    }
+    if (ctx->context) {
+        zmq_ctx_term(ctx->context);
+    }
+    if (ctx->url) {
+        av_freep(&ctx->url);
+    }
+    av_freep(&ctx);
+}
+
+// Parse int64 numbers from a message "msg:1,2,3,4,..."
+static int get_zmq_msg_numbers(const char *msg, int64_t *nums, int count) {
+    char *endptr;
+    const char *ptr = strchr(msg, ':') + 1;
+    int i = 0;
+    while (i < count && ptr && *ptr != '\0') {
+        errno = 0;
+        nums[i] = strtoll(ptr, &endptr, 10);
+        if (errno == ERANGE || endptr == ptr || (i < count - 1 && *endptr != ',') || (i == count - 1 && *endptr != '\0')) {
+            return i;
+        }
+        ptr = endptr + 1; // Skip the comma
+        i++;
+    }
+    return i;
+}
+
+static int poll_zmq_socket(void* socket, int timeout, VideoState *is) {
+    int ret = 0;
+
+    int ev = ZMQ_POLLIN;
+    zmq_pollitem_t items = { .socket = socket, .fd = 0, .events = ev, .revents = 0 };
+    ret = zmq_poll(&items, 1, timeout);
+    if (ret == -1) {
+        av_log(ffl_class, AV_LOG_ERROR, "Error occurred during zmq_poll(): %s\n", ZMQ_STRERROR);
+    } else if (items.revents & ev) {
+        char buf[256 + 1];
+        int size = sizeof(buf) - 1;
+        ret = zmq_recv(socket, buf, size, 0);
+        if (ret == -1) {
+            av_log(ffl_class, AV_LOG_ERROR, "Error occurred during zmq_recv(): %s\n", ZMQ_STRERROR);
+        } else if (ret > size) {
+            av_log(ffl_class, AV_LOG_ERROR, "Message too long for zmq_recv() buffer[%d]\n", size);
+            ret = -size;
+        } else {
+            #define ZMQ_RET_OK 0
+            #define ZMQ_RET_ERR_UNKNOWN -1
+            #define ZMQ_RET_ERR_ARG -2
+            #define ZMQ_RET_TYPE_NONE ZMQ_RET_OK
+            #define ZMQ_RET_TYPE_NUM1 (ZMQ_RET_OK + 1)
+            int64_t ret_num1 = 0;
+            #define ZMQ_RET_TYPE_STR 3
+            char ret_str_buf[256];
+
+            int ret_type = ZMQ_RET_TYPE_NONE;
+            int ret_err = ZMQ_RET_OK;
+            const char *ret_err_msg = NULL;
+            int len = 0;
+
+            buf[ret] = '\0';
+            av_log(ffl_class, AV_LOG_TRACE, "Received ZMQ message: %s\n", buf);
+
+            #define IPC_MSG(x) (strcmp(buf, (x)) == 0)
+            #define IPC_MSG_SET(x) (strncmp(buf, (x":"), strlen(x":")) == 0)
+            if (IPC_MSG("pause")) {
+                ret_type = ZMQ_RET_TYPE_NUM1;
+                ret_num1 = is->paused ? 0 : 1;
+                if (!is->paused) {
+                    toggle_pause(is);
+                }
+            } else if (IPC_MSG("play")) {
+                ret_type = ZMQ_RET_TYPE_NUM1;
+                ret_num1 = is->paused ? 0 : 1;
+                if (is->paused) {
+                    toggle_pause(is);
+                }
+            } else if (IPC_MSG_SET("volume")) {
+                int64_t volume;
+                if (get_zmq_msg_numbers(buf, &volume, 1) == 1) {
+                    if (volume >= 0 && volume <= 100) {
+                        ret_type = ZMQ_RET_TYPE_NUM1;
+                        ret_num1 = is->audio_volume;
+                        is->audio_volume = lrint((volume * SDL_MIX_MAXVOLUME) / 100.0);
+                        if (is->audio_volume > 0) {
+                            is->muted = 0;
+                        }
+                    } else {
+                        ret_err = ZMQ_RET_ERR_ARG;
+                        ret_err_msg = "volume must be between 0 and 100";
+                    }
+                } else {
+                    ret_err = ZMQ_RET_ERR_ARG;
+                    ret_err_msg = "volume must be a number";
+                }
+            } else if (IPC_MSG("volume")) {
+                ret_type = ZMQ_RET_TYPE_NUM1;
+                ret_num1 = lrint((is->audio_volume * 100.0) / SDL_MIX_MAXVOLUME);
+            } else if (IPC_MSG("step")) {
+                ret_type = ZMQ_RET_TYPE_NUM1;
+                ret_num1 = is->paused ? 0 : 1;
+                step_to_next_frame(is);
+            } else if (IPC_MSG("frame_num")) {
+                ret_type = ZMQ_RET_TYPE_NUM1;
+                ret_num1 = frame_no;
+            } else if (IPC_MSG_SET("window_pos_size")) {
+                int64_t nums[4];
+                if (get_zmq_msg_numbers(buf, nums, 4) == 4) {
+                    SDL_SetWindowPosition(window, nums[0], nums[1]);
+                    SDL_SetWindowSize(window, nums[2], nums[3]);
+                } else {
+                    ret_err = ZMQ_RET_ERR_ARG;
+                    ret_err_msg = "window_pos_size must be in format 'x,y,w,h'";
+                }
+            } else if (IPC_MSG("window_pos_size")) {
+                int x, y, w, h;
+                ret_type = ZMQ_RET_TYPE_STR;
+                SDL_GetWindowPosition(window, &x, &y);
+                SDL_GetWindowSize(window, &w, &h);
+                snprintf(ret_str_buf, sizeof(ret_str_buf), "%d,%d,%d,%d", x, y, w, h);
+            } else if (IPC_MSG_SET("window_maximized" )) {
+                char *ptr = strchr(buf, ':') + 1;
+                int maximized = atoi(ptr);
+                if (maximized == 0) {
+                    SDL_RestoreWindow(window);
+                } else if (maximized == 1) {
+                    SDL_MaximizeWindow(window);
+                } else {
+                    ret_err = ZMQ_RET_ERR_ARG;
+                    ret_err_msg = "window_maximized must be 0 or 1";
+                }
+            } else if (IPC_MSG("window_maximized")) {
+                ret_type = ZMQ_RET_TYPE_NUM1;
+                ret_num1 = (SDL_GetWindowFlags(window) & SDL_WINDOW_MAXIMIZED) ? 1 : 0;
+            } else {
+                ret_err = ZMQ_RET_ERR_UNKNOWN;
+                ret_err_msg = "unknown command";
+            }
+
+
+            if (ret_err < ZMQ_RET_OK) {
+                len += sprintf(buf + len, "%d:", ret_err);
+                if (ret_err_msg) {
+                    len += snprintf(buf + len, sizeof(buf) - len, "%s", ret_err_msg);
+                }
+            } else {
+                len += sprintf(buf + len, "%d:", ret_type);
+                if (ret_type == ZMQ_RET_TYPE_NUM1) {
+                    len += sprintf(buf + len, "%"PRId64, ret_num1);
+                } else if (ret_type == ZMQ_RET_TYPE_STR) {
+                    len += snprintf(buf + len, sizeof(buf) - len, "%s", ret_str_buf);
+                }
+            }
+
+            ret = zmq_send(socket, buf, len, 0);
+            if (ret == -1) {
+                av_log(ffl_class, AV_LOG_ERROR, "Error occurred during zmq_send(): %s\n", ZMQ_STRERROR);
+            }
+        }
+    }
+    return ret;
 }
 
 static int video_thread(void *arg)
@@ -3655,6 +3913,8 @@ static void event_loop(VideoState *cur_stream)
         }
         switch (event.type) {
         case SDL_KEYDOWN:
+            if (blockffplaykeys)
+                continue;
             if (exit_on_keydown || event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_q) {
                 do_exit(cur_stream);
                 break;
@@ -4009,9 +4269,12 @@ static const OptionDef options[] = {
     { "o",                  OPT_TYPE_STRING,          0, { &output_fname }, "ffglitch output file", "file" },
 
     /* custom fflive */
+    { "blockffplaykeys",    OPT_TYPE_BOOL,   OPT_EXPERT, { &blockffplaykeys }, "block all ffplay original hotkeys", "" },
     { "frame_counter_off",  OPT_TYPE_INT64,  OPT_EXPERT, { &current_frame_num }, "ffglitch script frame counter offset", "" },
+    { "noframedropearly",   OPT_TYPE_BOOL,   OPT_EXPERT, { &noframedropearly }, "don't drop frames when cpu is too slow", "" },
     { "print_frameno",      OPT_TYPE_BOOL, OPT_VIDEO | OPT_EXPERT, { &print_frameno }, "print frame number on each frame", "" },
-    { "start_paused",       OPT_TYPE_BOOL,   OPT_EXPERT, { &start_paused }, "start with paused video" },
+    { "start_paused",       OPT_TYPE_BOOL,   OPT_EXPERT, { &start_paused }, "start with paused video", "" },
+    { "zmq_url",            OPT_TYPE_STRING,   OPT_DATA, { &zmq_url }, "ZMQ bind url for REQ/REP connection", "url" },
 
     { NULL, },
 };
@@ -4211,6 +4474,10 @@ int main(int argc, char **argv)
     if (!is) {
         av_log(ffl_class, AV_LOG_FATAL, "Failed to initialize VideoState!\n");
         do_exit(NULL);
+    }
+
+    if (zmq_url != NULL) {
+        zmq_ctrl_ctx = create_zmq_socket(is, zmq_url);
     }
 
     event_loop(is);
