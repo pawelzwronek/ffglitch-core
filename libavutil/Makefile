@@ -366,29 +366,29 @@ QUICKJS_OBJS += $(QUICKJS_OBJS-yes)
 $(addprefix $(SUBDIR), quickjs/quickjs-zmq.o): CFLAGS += -I$(SRC_PATH)/libavutil/zeromq/include
 $(addprefix $(SUBDIR), quickjs/quickjs-rtmidi.o): CFLAGS += -I$(SRC_PATH)/libavutil/rtmidi
 
-QUICKJS_QJS_OBJS += quickjs/qjs.o
-QUICKJS_QJS_OBJS += quickjs/qjscalc.o
-QUICKJS_QJS_OBJS += quickjs/repl.o
-QUICKJS_QJS_OBJS-$(CONFIG_LIBZMQ) += $(ZEROMQ_OBJS)
-QUICKJS_QJS_OBJS-$(CONFIG_RTMIDI) += $(RTMIDI_OBJS)
-QUICKJS_QJS_OBJS += $(QUICKJS_QJS_OBJS-yes)
+QUICKJS_FFJS_OBJS += quickjs/qjs.o
+QUICKJS_FFJS_OBJS += quickjs/qjscalc.o
+QUICKJS_FFJS_OBJS += quickjs/repl.o
+QUICKJS_FFJS_OBJS-$(CONFIG_LIBZMQ) += $(ZEROMQ_OBJS)
+QUICKJS_FFJS_OBJS-$(CONFIG_RTMIDI) += $(RTMIDI_OBJS)
+QUICKJS_FFJS_OBJS += $(QUICKJS_FFJS_OBJS-yes)
 
 QUICKJS_CONFIG_VERSION := $(shell cat $(SRC_PATH)/libavutil/quickjs/VERSION)
 
 QUICKJS_EXTRA_CFLAGS-$(CONFIG_LIBZMQ) += -DCONFIG_LIBZMQ
 QUICKJS_EXTRA_CFLAGS-$(CONFIG_RTMIDI) += -DCONFIG_RTMIDI
 QUICKJS_EXTRA_CFLAGS += $(QUICKJS_EXTRA_CFLAGS-yes)
-$(addprefix $(SUBDIR), $(QUICKJS_OBJS) $(QUICKJS_QJS_OBJS)): CFLAGS += -D_GNU_SOURCE -DCONFIG_VERSION=\"$(QUICKJS_CONFIG_VERSION)\" -DCONFIG_BIGNUM $(QUICKJS_EXTRA_CFLAGS)
+$(addprefix $(SUBDIR), $(QUICKJS_OBJS) $(QUICKJS_FFJS_OBJS)): CFLAGS += -D_GNU_SOURCE -DCONFIG_VERSION=\"$(QUICKJS_CONFIG_VERSION)\" -DCONFIG_BIGNUM $(QUICKJS_EXTRA_CFLAGS)
 
 QUICKJS_LIBS=-lm -lpthread
 ifneq ($(EXESUF),.exe)
 QUICKJS_LIBS+=-ldl
 endif
 
-qjs$(PROGSSUF)$(EXESUF)_g: $(addprefix $(SUBDIR), $(QUICKJS_OBJS) $(QUICKJS_QJS_OBJS))
-	$(CXX) -o $@ $^ $(QUICKJS_LIBS) $(EXTRALIBS-qjs)
+ffjs$(PROGSSUF)$(EXESUF)_g: $(addprefix $(SUBDIR), $(QUICKJS_OBJS) $(QUICKJS_FFJS_OBJS))
+	$(CXX) -o $@ $^ $(QUICKJS_LIBS) $(EXTRALIBS-ffjs)
 
-qjs$(PROGSSUF)$(EXESUF): qjs$(PROGSSUF)$(EXESUF)_g
+ffjs$(PROGSSUF)$(EXESUF): ffjs$(PROGSSUF)$(EXESUF)_g
 ifeq ($(STRIPTYPE),direct)
 	$(STRIP) -o $@ $<
 else
@@ -484,7 +484,7 @@ tools/crypto_bench.o: CFLAGS += -DUSE_EXT_LIBS=0$(if $(VERSUS),$(subst +,+USE_,+
 $(SUBDIR)tests/lzo$(EXESUF): ELIBS = -llzo2
 
 clean::
-	$(RM) $(CLEANSUFFIXES:%=libavutil/quickjs/%) qjs$(EXESUF)
+	$(RM) $(CLEANSUFFIXES:%=libavutil/quickjs/%) ffjs$(EXESUF)
 	$(RM) $(CLEANSUFFIXES:%=libavutil/rtmidi/%)
 	$(RM) $(CLEANSUFFIXES:%=libavutil/zeromq/external/sha1/%)
 	$(RM) $(CLEANSUFFIXES:%=libavutil/zeromq/external/wepoll/%)
