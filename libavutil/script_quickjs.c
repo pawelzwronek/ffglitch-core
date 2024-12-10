@@ -486,6 +486,7 @@ FFQuickJSObject *ff_quickjs_get_func(FFQuickJSContext *js_ctx, const char *func_
 int ff_quickjs_call_func(FFQuickJSContext *js_ctx, FFQuickJSObject **pjs_ret, FFQuickJSObject *js_func, va_list vl)
 {
     JSContext *ctx = js_ctx->ctx;
+    JSRuntime *qjs_rt = js_ctx->rt;
     JSValue jret;
     JSValue *argv = NULL;
     int argc = 0;
@@ -498,6 +499,7 @@ int ff_quickjs_call_func(FFQuickJSContext *js_ctx, FFQuickJSObject **pjs_ret, FF
         GROW_ARRAY(argv, argc);
         argv[argc-1] = arg->jval;
     }
+    JS_UpdateStackTop(qjs_rt);
     jret = JS_Call(ctx, js_func->jval, JS_UNDEFINED, argc, argv);
     if ( JS_IsException(jret) )
     {
