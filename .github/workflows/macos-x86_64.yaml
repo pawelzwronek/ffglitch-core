@@ -36,7 +36,7 @@ jobs:
           cd build
           ../configure --disable-doc --enable-gpl --enable-static --disable-shared --disable-autodetect --disable-iconv --enable-zlib --enable-libxvid --enable-rtmidi --enable-libzmq --enable-sdl2 --enable-avfoundation
           make -j$(sysctl -n hw.ncpu)
-          make -j$(sysctl -n hw.ncpu) qjs
+          make -j$(sysctl -n hw.ncpu) ffjs
 
       - name: Package binaries
         run: |
@@ -53,7 +53,7 @@ jobs:
           sed -i '' s/SDL2_VERSION/"${SDL2_VERSION}"/g        ffglitch_readme.txt
           cd build
           mkdir "${FULL_NAME}"
-          cp ffedit ffgac fflive qjs "${FULL_NAME}"
+          cp ffedit ffgac fflive ffjs "${FULL_NAME}"
           cp ../ffglitch_readme.txt "${FULL_NAME}"/readme.txt
           zip -9 -r "../${OUTPUT_FILE}" "${FULL_NAME}"
         shell: bash
